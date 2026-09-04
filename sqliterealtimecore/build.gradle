@@ -31,26 +31,15 @@ android {
     }
 }
 
-tasks.register("install") {
-    dependsOn("publishReleasePublicationToLibraryRepository")
-}
-
-publishing {
-    publications {
-        release(MavenPublication) {
-            groupId = 'br.com.phs'
-            artifactId = 'sqliterealtimecore-compat'
-            version = '1.0.0-local.1'
-
-            afterEvaluate {
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
                 from components.release
+                groupId = 'com.github.RogerPhilippe'
+                artifactId = 'sqliterealtimecore-compat'
+                version = '1.0.0'
             }
-        }
-    }
-    repositories {
-        maven {
-            name = 'library'
-            url = uri('file:///C:/Android/LIB')
         }
     }
 }
