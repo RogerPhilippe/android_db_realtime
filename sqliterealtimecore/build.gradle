@@ -38,7 +38,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.RogerPhilippe'
                 artifactId = 'sqliterealtimecore-compat'
-                version = '1.0.0'
+                version = 'placeholder-version' // Jitpack will replace this with the actual version from the root project
             }
         }
     }
