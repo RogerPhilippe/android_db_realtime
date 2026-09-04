@@ -1,5 +1,7 @@
 # SQLiteRealtime (Android)
 
+[![](https://jitpack.io/v/RogerPhilippe/android_db_realtime.svg)](https://jitpack.io/#RogerPhilippe/android_db_realtime)
+
 Módulo Android (biblioteca `sqliterealtimecore` + app de exemplo) que permite
 enviar comandos SQL de um cliente remoto — o
 [DBBrowser](https://github.com/RogerPhilippe/DBBrowser) — para serem
