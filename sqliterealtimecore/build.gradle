@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
+    id 'maven-publish'
 }
 
 android {
@@ -30,6 +31,30 @@ android {
     }
 }
 
+tasks.register("install") {
+    dependsOn("publishReleasePublicationToLibraryRepository")
+}
+
+publishing {
+    publications {
+        release(MavenPublication) {
+            groupId = 'br.com.phs'
+            artifactId = 'sqliterealtimecore-compat'
+            version = '1.0.0-local.1'
+
+            afterEvaluate {
+                from components.release
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'library'
+            url = uri('file:///C:/Android/LIB')
+        }
+    }
+}
+
 dependencies {
 
     implementation 'androidx.core:core-ktx:1.7.0'
@@ -39,6 +64,6 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
 
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
 
 }
