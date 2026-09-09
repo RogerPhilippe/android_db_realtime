@@ -105,8 +105,9 @@ class ClientConnection() {
             }
 
             val statusCode = if (jsonArray.length() == 0) "204" else "200"
+            val columnsJsonArray = JSONArray(columnNames)
 
-            return """{"status":$statusCode, "columns": ${columnNames.asList()}, "content": $jsonArray}"""
+            return """{"status":$statusCode, "columns": $columnsJsonArray, "content": $jsonArray}"""
 
         } catch (ex: Exception) {
             logs?.e(ex)
