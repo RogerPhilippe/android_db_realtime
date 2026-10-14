@@ -17,6 +17,27 @@ La biblioteca inicia un servidor HTTP (NanoHTTPD) dentro de la app. El
 navegador es el cliente, así que nada necesita escuchar en tu computadora y el
 firewall o el antivirus no son un problema.
 
+## Instalación
+
+Agrega el repositorio de JitPack en `settings.gradle`:
+
+    dependencyResolutionManagement {
+        repositories {
+            google()
+            mavenCentral()
+            maven { url 'https://jitpack.io' }
+        }
+    }
+
+Agrega la dependencia en el `build.gradle` del módulo de tu app:
+
+    dependencies {
+        implementation 'com.github.RogerPhilippe:android_db_realtime:v2.0.0'
+    }
+
+La biblioteca declara el permiso `INTERNET` en su propio manifest, así que no
+hay nada más que configurar.
+
 ## Uso
 
 Implementa `DBAdapter` para conectar la biblioteca con la base de datos de tu
