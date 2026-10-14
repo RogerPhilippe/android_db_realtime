@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>SQLite Realtime</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel2: #eef0f4; --border: #d8dce3;
+  --text: #1c2330; --muted: #6a7487; --accent: #2563eb; --accent-text: #ffffff;
+  --danger: #c62828; --ok: #1b873f; --warn: #b26a00;
+  --kw: #7c3aed; --str: #0f7b4a; --num: #b45309; --com: #8a93a5; --id: #0369a1; --fn: #b91c1c; --tbl: #0e7490;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151c; --panel: #181d27; --panel2: #202634; --border: #2c3445;
+    --text: #e4e8f0; --muted: #8b95aa; --accent: #5b8cff; --accent-text: #0b1020;
+    --danger: #ff6b6b; --ok: #4cc27a; --warn: #f0b04a;
+    --kw: #b18cff; --str: #6fd3a1; --num: #f0b070; --com: #6c768a; --id: #6ec1ee; --fn: #ff8a8a; --tbl: #5fd0e6;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 var(--font); }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; cursor: pointer; min-height: 34px; }
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button.small { padding: 2px 8px; min-height: 26px; font-size: 12px; }
+input { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; width: 100%; }
+input:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* login */
+.login { min-height: 100%; display: grid; place-items: center; padding: 16px; }
+.login form { width: min(420px, 100%); background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px; display: grid; gap: 12px; }
+.login h1 { margin: 0; font-size: 20px; }
+.login p { margin: 0; color: var(--muted); }
+.login input { font-family: var(--mono); font-size: 16px; letter-spacing: .08em; text-transform: uppercase; }
+.login .msg { color: var(--danger); min-height: 1.4em; }
+
+/* app shell */
+#app { height: 100dvh; display: grid; grid-template-rows: auto 1fr; }
+header { display: flex; align-items: center; gap: 10px; padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); background: var(--panel); border-bottom: 1px solid var(--border); }
+header strong { font-size: 15px; white-space: nowrap; }
+.spacer { flex: 1; }
+.status { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.dot.on { background: var(--ok); }
+.dot.off { background: var(--danger); }
+
+nav.tabs { display: none; background: var(--panel); border-bottom: 1px solid var(--border); }
+nav.tabs button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 10px 4px; border-bottom: 2px solid transparent; }
+nav.tabs button.active { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+main { display: grid; grid-template-columns: 260px 1fr; grid-template-rows: minmax(120px, 36%) 1fr 170px; grid-template-areas: "tables editor" "tables results" "tables terminal"; min-height: 0; }
+main > * { min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--panel); }
+#pane-tables { grid-area: tables; border-right: 1px solid var(--border); }
+#pane-editor { grid-area: editor; border-bottom: 1px solid var(--border); }
+#pane-results { grid-area: results; background: var(--bg); }
+#pane-terminal { grid-area: terminal; border-top: 1px solid var(--border); }
+.bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--panel2); flex-wrap: wrap; }
+.bar b { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.scroll { flex: 1; overflow: auto; min-height: 0; }
+
+/* tables sidebar */
+#tableList { padding: 6px; }
+#tableList details { border-radius: 8px; }
+#tableList summary { display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer; border-radius: 8px; list-style: none; }
+#tableList summary::-webkit-details-marker { display: none; }
+#tableList summary:hover { background: var(--panel2); }
+#tableList summary::before { content: "\25B8"; color: var(--muted); font-size: 12px; width: 10px; transition: transform .12s; }
+#tableList details[open] > summary::before { transform: rotate(90deg); }
+#tableList .tname { flex: 1; color: var(--tbl); font-family: var(--mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tableList .ttype { color: var(--muted); font-size: 11px; }
+#tableList ul { list-style: none; margin: 0 0 4px; padding: 0 0 0 20px; }
+#tableList li { font-family: var(--mono); font-size: 12px; color: var(--muted); padding: 1px 0; display: flex; gap: 6px; }
+#tableList li span:first-child { color: var(--text); }
+.empty { padding: 16px; color: var(--muted); }
+#tableList .more { padding: 0 8px; font-size: 16px; line-height: 1; }
+#menu { position: fixed; z-index: 20; min-width: 190px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); display: grid; }
+#menu button { border: 0; background: transparent; text-align: left; border-radius: 6px; padding: 8px 12px; }
+#menu button:hover { background: var(--panel2); }
+
+/* editor with highlight */
+#suggest { display: flex; gap: 6px; padding: 4px 8px; overflow-x: auto; border-bottom: 1px solid var(--border); background: var(--panel2); min-height: 36px; align-items: center; }
+#suggest:empty::before { content: "Table, column and keyword suggestions appear here (Tab accepts the first one)."; color: var(--muted); font-size: 12px; white-space: nowrap; }
+#suggest button { font-family: var(--mono); font-size: 12px; white-space: nowrap; padding: 2px 8px; min-height: 26px; }
+.editor { position: relative; flex: 1; min-height: 0; font: 14px/1.5 var(--mono); }
+.editor pre, .editor textarea { position: absolute; inset: 0; margin: 0; padding: 10px 12px; font: inherit; letter-spacing: 0; tab-size: 2; white-space: pre; word-wrap: normal; border: 0; overflow: auto; }
+.editor pre { pointer-events: none; overflow: hidden; color: var(--text); }
+.editor textarea { background: transparent; color: transparent; caret-color: var(--text); resize: none; outline: none; -webkit-text-fill-color: transparent; }
+.editor textarea::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); -webkit-text-fill-color: transparent; }
+.editor textarea::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }
+.t-kw { color: var(--kw); font-weight: 600; } .t-str { color: var(--str); } .t-num { color: var(--num); }
+.t-com { color: var(--com); font-style: italic; } .t-id { color: var(--id); } .t-fn { color: var(--fn); } .t-tbl { color: var(--tbl); }
+
+/* results */
+#resultTabs { display: flex; gap: 4px; flex-wrap: wrap; }
+#resultTabs button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.meta { padding: 8px 12px; color: var(--muted); font-size: 12px; display: flex; gap: 12px; flex-wrap: wrap; }
+.meta code { color: var(--text); font-family: var(--mono); }
+.err { margin: 12px; padding: 12px; border: 1px solid var(--danger); border-radius: 8px; color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); font-family: var(--mono); white-space: pre-wrap; word-break: break-word; }
+.ok { margin: 12px; padding: 12px; border: 1px solid var(--ok); border-radius: 8px; color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-family: var(--mono); font-size: 13px; background: var(--panel); }
+th, td { padding: 5px 10px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); text-align: left; max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--panel2); z-index: 1; font-weight: 600; }
+th.rn, td.rn { color: var(--muted); text-align: right; position: sticky; left: 0; background: var(--panel2); max-width: none; }
+th.rn { z-index: 2; }
+td.num { color: var(--num); }
+td.null { color: var(--muted); font-style: italic; }
+td.blob { color: var(--warn); }
+tr:hover td { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+
+/* terminal */
+#termBody { padding: 6px 10px; font: 12px/1.5 var(--mono); }
+.line { white-space: pre-wrap; word-break: break-word; }
+.line .ts { color: var(--muted); margin-right: 8px; }
+.line .detail { color: var(--muted); margin-left: 8px; }
+.line.sql .msg { color: var(--id); cursor: pointer; }
+.line.sql .msg:hover { text-decoration: underline; }
+.line.warn .msg { color: var(--warn); } .line.error .msg { color: var(--danger); }
+
+/* mobile */
+@media (max-width: 800px) {
+  #app { grid-template-rows: auto auto 1fr; }
+  nav.tabs { display: flex; }
+  main { display: block; position: relative; }
+  main > * { display: none; height: 100%; border: 0 !important; }
+  main > .active { display: flex; }
+  #pane-results { background: var(--bg); }
+  header .status span { display: none; }
+  button { min-height: 40px; }
+  button.small { min-height: 30px; }
+  .editor { font-size: 15px; }
+}
+</style>
+</head>
+<body>
+
+<div id="login" class="login" hidden>
+  <form id="loginForm">
+    <h1>SQLite Realtime</h1>
+    <p>Enter the token generated by the app (returned by <code>SqlRealtime.start</code>).</p>
+    <input id="tokenInput" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="TOKEN" required>
+    <button class="primary" type="submit">Log in</button>
+    <p class="msg" id="loginMsg" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <strong>SQLite Realtime</strong>
+    <span class="status"><i class="dot" id="wsDot"></i><span id="wsText">connecting…</span></span>
+    <span class="spacer"></span>
+    <button class="primary" id="runBtn" title="Run (Ctrl/Cmd + Enter)">▶ Run</button>
+    <button id="logoutBtn" title="Log out">Log out</button>
+  </header>
+  <nav class="tabs" id="tabs">
+    <button data-pane="tables">Tables</button>
+    <button data-pane="editor" class="active">Editor</button>
+    <button data-pane="results">Results</button>
+    <button data-pane="terminal">Terminal</button>
+  </nav>
+  <main id="panes">
+    <aside id="pane-tables">
+      <div class="bar"><b>Tables</b><span class="spacer"></span><button class="small" id="refreshBtn">Refresh</button></div>
+      <div class="scroll" id="tableList"></div>
+    </aside>
+    <section id="pane-editor" class="active">
+      <div id="suggest"></div>
+      <div class="editor">
+        <pre id="hl" aria-hidden="true"><code></code></pre>
+        <textarea id="sql" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" wrap="off" placeholder="SELECT * FROM tabela LIMIT 100;"></textarea>
+      </div>
+    </section>
+    <section id="pane-results">
+      <div class="bar">
+        <b>Results</b>
+        <div id="resultTabs"></div>
+        <span class="spacer"></span>
+        <button class="small" id="copyBtn" disabled>Copy</button>
+        <button class="small" id="csvBtn" disabled>CSV</button>
+        <button class="small" id="jsonBtn" disabled>JSON</button>
+      </div>
+      <div class="scroll" id="resultBody"><div class="empty">Run a command to see the result.</div></div>
+    </section>
+    <section id="pane-terminal">
+      <div class="bar"><b>Terminal</b><span class="spacer"></span><button class="small" id="clearBtn">Clear</button></div>
+      <div class="scroll" id="termBody"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+const isMobile = () => matchMedia("(max-width: 800px)").matches;
+
+let token = store.get("sqlrt.token") || "";
+let schema = [];
+let results = [];
+let activeResult = 0;
+
+/* ---------- auth + api ---------- */
+async function api(path, opts = {}) {
+  const headers = Object.assign({}, opts.headers, { Authorization: "Bearer " + token });
+  const r = await fetch(path, Object.assign({}, opts, { headers }));
+  if (r.status === 401) { logout("Invalid or expired token."); throw "auth"; }
+  if (!r.ok) {
+    let msg = "Error " + r.status;
+    try { msg = (await r.json()).error || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return r;
+}
+
+function showLogin(message) {
+  $("#app").hidden = true;
+  $("#login").hidden = false;
+  $("#loginMsg").textContent = message || "";
+  $("#tokenInput").focus();
+}
+
+function logout(message) {
+  token = "";
+  store.del("sqlrt.token");
+  closeSocket();
+  showLogin(message);
+}
+
+async function enter() {
+  $("#login").hidden = true;
+  $("#app").hidden = false;
+  loadSchema();
+  openSocket();
+  $("#sql").focus();
+}
+
+$("#loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  token = $("#tokenInput").value.trim().toUpperCase();
+  $("#loginMsg").textContent = "";
+  try {
+    await api("/api/auth");
+    store.set("sqlrt.token", token);
+    enter();
+  } catch (err) {
+    if (err !== "auth") $("#loginMsg").textContent = err.message;
+  }
+});
+$("#logoutBtn").addEventListener("click", () => logout(""));
+
+/* ---------- panes (mobile tabs) ---------- */
+function setPane(name) {
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.pane === name));
+  document.querySelectorAll("#panes > *").forEach((p) => p.classList.toggle("active", p.id === "pane-" + name));
+}
+$("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setPane(b.dataset.pane); });
+
+/* ---------- SQL highlight ---------- */
+const KEYWORDS = new Set(("ABORT ACTION ADD AFTER ALL ALTER ALWAYS ANALYZE AND AS ASC ATTACH AUTOINCREMENT BEFORE BEGIN BETWEEN BY CASCADE CASE CAST CHECK COLLATE COLUMN COMMIT CONFLICT CONSTRAINT CREATE CROSS CURRENT CURRENT_DATE CURRENT_TIME CURRENT_TIMESTAMP DATABASE DEFAULT DEFERRABLE DEFERRED DELETE DESC DETACH DISTINCT DO DROP EACH ELSE END ESCAPE EXCEPT EXCLUDE EXCLUSIVE EXISTS EXPLAIN FAIL FILTER FIRST FOLLOWING FOR FOREIGN FROM FULL GENERATED GLOB GROUP GROUPS HAVING IF IGNORE IMMEDIATE IN INDEX INDEXED INITIALLY INNER INSERT INSTEAD INTERSECT INTO IS ISNULL JOIN KEY LAST LEFT LIKE LIMIT MATCH MATERIALIZED NATURAL NO NOT NOTHING NOTNULL NULL NULLS OF OFFSET ON OR ORDER OTHERS OUTER OVER PARTITION PLAN PRAGMA PRECEDING PRIMARY QUERY RAISE RANGE RECURSIVE REFERENCES REGEXP REINDEX RELEASE RENAME REPLACE RESTRICT RETURNING RIGHT ROLLBACK ROW ROWS SAVEPOINT SELECT SET TABLE TEMP TEMPORARY THEN TIES TO TRANSACTION TRIGGER UNBOUNDED UNION UNIQUE UPDATE USING VACUUM VALUES VIEW VIRTUAL WHEN WHERE WINDOW WITH WITHOUT").split(" "));
+const TOKEN_RE = /(--[^\n]*|\/\*[\s\S]*?(?:\*\/|$))|('(?:[^']|'')*'?)|("(?:[^"]|"")*"?|`[^`]*`?|\[[^\]\n]*\]?)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|([\s\S])/g;
+
+function highlight(text) {
+  const names = new Set();
+  schema.forEach((t) => { names.add(t.name.toLowerCase()); t.columns.forEach((c) => names.add(c.name.toLowerCase())); });
+  let out = "";
+  TOKEN_RE.lastIndex = 0;
+  let m;
+  while ((m = TOKEN_RE.exec(text)) !== null) {
+    const [all, com, str, id, num, word] = m;
+    const e = esc(all);
+    if (com) out += '<span class="t-com">' + e + "</span>";
+    else if (str) out += '<span class="t-str">' + e + "</span>";
+    else if (id) out += '<span class="t-id">' + e + "</span>";
+    else if (num) out += '<span class="t-num">' + e + "</span>";
+    else if (word) {
+      if (KEYWORDS.has(word.toUpperCase())) out += '<span class="t-kw">' + e + "</span>";
+      else if (text[m.index + word.length] === "(") out += '<span class="t-fn">' + e + "</span>";
+      else if (names.has(word.toLowerCase())) out += '<span class="t-tbl">' + e + "</span>";
+      else out += e;
+    } else out += e;
+  }
+  return out;
+}
+
+const ta = $("#sql");
+const hl = $("#hl");
+function renderHighlight() {
+  hl.firstChild.innerHTML = highlight(ta.value) + "\n ";
+  hl.scrollTop = ta.scrollTop;
+  hl.scrollLeft = ta.scrollLeft;
+}
+ta.addEventListener("scroll", () => { hl.scrollTop = ta.scrollTop; hl.scrollLeft = ta.scrollLeft; });
+ta.addEventListener("input", () => { renderHighlight(); store.set("sqlrt.sql", ta.value); updateSuggestions(); });
+ta.addEventListener("click", updateSuggestions);
+ta.addEventListener("keyup", (e) => { if (e.key.startsWith("Arrow")) updateSuggestions(); });
+ta.value = store.get("sqlrt.sql") || "";
+renderHighlight();
+
+/* ---------- autocomplete ---------- */
+const suggestEl = $("#suggest");
+let suggestions = [];
+
+function currentWord() {
+  const pos = ta.selectionStart;
+  const before = ta.value.slice(0, pos);
+  const m = /([A-Za-z_][A-Za-z0-9_]*)?(\.)?([A-Za-z_][A-Za-z0-9_]*)?$/.exec(before);
+  // m[1].m[3] = table.column prefix; otherwise m[3] (or m[1]) is the bare word
+  if (m && m[2]) return { table: m[1] || "", prefix: m[3] || "", length: (m[3] || "").length };
+  const w = (m && (m[1] || m[3])) || "";
+  return { table: "", prefix: w, length: w.length };
+}
+
+function updateSuggestions() {
+  if (ta.selectionStart !== ta.selectionEnd) { clearSuggestions(); return; }
+  const { table, prefix } = currentWord();
+  const p = prefix.toLowerCase();
+  let list = [];
+  if (table) {
+    const t = schema.find((x) => x.name.toLowerCase() === table.toLowerCase());
+    if (t) list = t.columns.map((c) => c.name);
+  } else if (p.length >= 1) {
+    schema.forEach((t) => list.push(t.name));
+    schema.forEach((t) => t.columns.forEach((c) => list.push(c.name)));
+    KEYWORDS.forEach((k) => list.push(k));
+  }
+  const seen = new Set();
+  suggestions = list.filter((s) => {
+    const k = s.toLowerCase();
+    if (seen.has(k) || k === p || (p && !k.startsWith(p))) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 14);
+  suggestEl.innerHTML = "";
+  suggestions.forEach((s) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = s;
+    b.addEventListener("mousedown", (e) => e.preventDefault());
+    b.addEventListener("click", () => applySuggestion(s));
+    suggestEl.appendChild(b);
+  });
+}
+
+function clearSuggestions() { suggestions = []; suggestEl.innerHTML = ""; }
+
+function applySuggestion(text) {
+  const { prefix, length } = currentWord();
+  const pos = ta.selectionStart;
+  const needsQuote = !/^[A-Za-z_][A-Za-z0-9_]*$/.test(text);
+  const value = needsQuote ? '"' + text.replace(/"/g, '""') + '"' : (KEYWORDS.has(text) && prefix === prefix.toLowerCase() && prefix ? text.toLowerCase() : text);
+  ta.setRangeText(value, pos - length, pos, "end");
+  ta.focus();
+  ta.dispatchEvent(new Event("input"));
+}
+
+ta.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); run(); return; }
+  if (e.key === "Escape") { clearSuggestions(); return; }
+  if (e.key === "Tab" && !e.shiftKey) {
+    e.preventDefault();
+    if (suggestions.length) applySuggestion(suggestions[0]);
+    else { ta.setRangeText("  ", ta.selectionStart, ta.selectionEnd, "end"); ta.dispatchEvent(new Event("input")); }
+  }
+});
+
+/* ---------- schema ---------- */
+async function loadSchema() {
+  try {
+    schema = (await (await api("/api/schema")).json()).tables;
+  } catch (e) { if (e !== "auth") $("#tableList").innerHTML = '<div class="empty">' + esc(e.message) + "</div>"; return; }
+  renderTables();
+  renderHighlight();
+}
+
+function renderTables() {
+  const box = $("#tableList");
+  if (!schema.length) { box.innerHTML = '<div class="empty">No tables.</div>'; return; }
+  box.innerHTML = schema.map((t, i) =>
+    '<details><summary><span class="tname" title="' + esc(t.name) + '">' + esc(t.name) + '</span><span class="ttype">' + esc(t.type) +
+    '</span><button class="small more" data-menu="' + i + '" title="Actions" aria-label="Table actions: ' + esc(t.name) + '">&#8942;</button></summary><ul>' +
+    t.columns.map((c) => "<li><span>" + esc(c.name) + (c.pk ? " 🔑" : "") + "</span><span>" + esc(c.type || "") + (c.notNull ? " NOT NULL" : "") + "</span></li>").join("") +
+    "</ul></details>").join("");
+}
+
+const qi = (n) => '"' + n.replace(/"/g, '""') + '"';
+const ql = (n) => "'" + n.replace(/'/g, "''") + "'";
+const TABLE_ACTIONS = [
+  { label: "Select", sql: (n) => "SELECT * FROM " + qi(n) + " LIMIT 100;" },
+  { label: "Insert", tablesOnly: true, run: false, sql: (n, t) =>
+      "INSERT INTO " + qi(n) + " (" + t.columns.map((c) => qi(c.name)).join(", ") + ")\nVALUES (" + t.columns.map(() => "NULL").join(", ") + ");" },
+  { label: "Info", sql: (n) => "PRAGMA table_info(" + qi(n) + ");" },
+  { label: "View CREATE", sql: (n) => "SELECT sql FROM sqlite_master WHERE name = " + ql(n) + ";" },
+  { label: "Indexes", sql: (n) => "PRAGMA index_list(" + qi(n) + ");" },
+  { label: "Foreign keys", sql: (n) => "PRAGMA foreign_key_list(" + qi(n) + ");" },
+  { label: "Count rows", sql: (n) => "SELECT COUNT(*) AS total FROM " + qi(n) + ";" },
+  { label: "Copy name", copy: true },
+];
+
+const menu = document.createElement("div");
+menu.id = "menu";
+menu.hidden = true;
+document.body.appendChild(menu);
+
+function closeMenu() { menu.hidden = true; }
+
+function openMenu(anchor, table) {
+  menu.innerHTML = "";
+  TABLE_ACTIONS.filter((a) => !a.tablesOnly || table.type === "table").forEach((a) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = a.label;
+    b.addEventListener("click", async () => {
+      closeMenu();
+      if (a.copy) { try { await navigator.clipboard.writeText(table.name); } catch (e) {} return; }
+      ta.value = a.sql(table.name, table);
+      ta.dispatchEvent(new Event("input"));
+      if (a.run === false) { if (isMobile()) setPane("editor"); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); return; }
+      run();
+    });
+    menu.appendChild(b);
+  });
+  menu.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + "px";
+  menu.style.top = Math.max(8, Math.min(r.bottom + 4, innerHeight - h - 8)) + "px";
+}
+
+$("#tableList").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-menu]");
+  if (!b) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (!menu.hidden) { closeMenu(); return; }
+  openMenu(b, schema[+b.dataset.menu]);
+});
+document.addEventListener("click", (e) => { if (!menu.contains(e.target)) closeMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
+$("#tableList").addEventListener("scroll", closeMenu);
+window.addEventListener("resize", closeMenu);
+$("#refreshBtn").addEventListener("click", loadSchema);
+
+/* ---------- run ---------- */
+let busy = false;
+async function run() {
+  if (busy) return;
+  const selected = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+  const sql = selected || ta.value.trim();
+  if (!sql) return;
+  busy = true;
+  $("#runBtn").disabled = true;
+  clearSuggestions();
+  try {
+    const r = await api("/api/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ sql }),
+    });
+    results = (await r.json()).results;
+    activeResult = results.length - 1 >= 0 && results[results.length - 1].type === "error" ? results.length - 1 : 0;
+    renderResults();
+    if (results.some((x) => x.type === "update")) loadSchema();
+  } catch (e) {
+    if (e !== "auth") {
+      results = [{ type: "error", sql, message: e.message }];
+      activeResult = 0;
+      renderResults();
+    }
+  } finally {
+    busy = false;
+    $("#runBtn").disabled = false;
+    if (isMobile()) setPane("results");
+  }
+}
+$("#runBtn").addEventListener("click", run);
+
+/* ---------- results ---------- */
+function cellHtml(v) {
+  if (v === null) return '<td class="null">NULL</td>';
+  if (typeof v === "number") return '<td class="num">' + v + "</td>";
+  if (typeof v === "object" && v.$blob !== undefined) {
+    const bytes = Math.floor(v.$blob.length * 3 / 4);
+    return '<td class="blob" title="BLOB">&lt;BLOB ' + bytes + " bytes&gt;</td>";
+  }
+  const s = String(v);
+  return '<td title="' + esc(s.length > 500 ? s.slice(0, 500) + "…" : s) + '">' + esc(s) + "</td>";
+}
+
+function renderResults() {
+  const tabs = $("#resultTabs");
+  const body = $("#resultBody");
+  tabs.innerHTML = results.length > 1
+    ? results.map((r, i) => '<button class="small' + (i === activeResult ? " active" : "") + '" data-i="' + i + '">' + (i + 1) + (r.type === "error" ? " ⚠" : "") + "</button>").join("")
+    : "";
+  const r = results[activeResult];
+  const hasRows = !!r && r.type === "rows";
+  $("#copyBtn").disabled = $("#csvBtn").disabled = $("#jsonBtn").disabled = !hasRows;
+  if (!r) { body.innerHTML = '<div class="empty">No result.</div>'; return; }
+
+  const meta = '<div class="meta"><code>' + esc(r.sql.length > 160 ? r.sql.slice(0, 160) + "…" : r.sql) + "</code>" +
+    (r.timeMs !== undefined ? "<span>" + r.timeMs + " ms</span>" : "") +
+    (hasRows ? "<span>" + r.rows.length + " row(s)" + (r.truncated ? " — truncated at the server limit" : "") + "</span>" : "") + "</div>";
+
+  if (r.type === "error") { body.innerHTML = meta + '<div class="err">' + esc(r.message) + "</div>"; return; }
+  if (r.type === "update") { body.innerHTML = meta + '<div class="ok">' + r.affected + " row(s) affected.</div>"; return; }
+  if (!r.rows.length) { body.innerHTML = meta + '<div class="empty">No rows returned.</div>'; return; }
+
+  body.innerHTML = meta + "<table><thead><tr><th class=\"rn\">#</th>" + r.columns.map((c) => "<th>" + esc(c) + "</th>").join("") +
+    "</tr></thead><tbody>" + r.rows.map((row, i) => '<tr><td class="rn">' + (i + 1) + "</td>" + row.map(cellHtml).join("") + "</tr>").join("") + "</tbody></table>";
+}
+$("#resultTabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { activeResult = +b.dataset.i; renderResults(); } });
+
+/* ---------- export ---------- */
+function plain(v) {
+  if (v === null) return "";
+  if (typeof v === "object") return v.$blob;
+  return String(v);
+}
+function toCsv(r) {
+  const q = (v) => { const s = plain(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return [r.columns.map(q).join(",")].concat(r.rows.map((row) => row.map(q).join(","))).join("\r\n");
+}
+function download(name, mime, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const stamp = () => new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
+$("#csvBtn").addEventListener("click", () => download("resultado-" + stamp() + ".csv", "text/csv;charset=utf-8", "﻿" + toCsv(results[activeResult])));
+$("#jsonBtn").addEventListener("click", () => {
+  const r = results[activeResult];
+  const data = r.rows.map((row) => Object.fromEntries(r.columns.map((c, i) => [c, row[i] !== null && typeof row[i] === "object" ? row[i].$blob : row[i]])));
+  download("resultado-" + stamp() + ".json", "application/json", JSON.stringify(data, null, 2));
+});
+$("#copyBtn").addEventListener("click", async () => {
+  const r = results[activeResult];
+  const tsv = [r.columns.join("\t")].concat(r.rows.map((row) => row.map((v) => plain(v).replace(/[\t\n\r]/g, " ")).join("\t"))).join("\n");
+  const btn = $("#copyBtn");
+  try { await navigator.clipboard.writeText(tsv); btn.textContent = "Copied!"; }
+  catch (e) { btn.textContent = "Failed"; }
+  setTimeout(() => (btn.textContent = "Copy"), 1200);
+});
+
+/* ---------- terminal (websocket) ---------- */
+let ws = null, lastEventId = 0, retry = 0, retryTimer = null, wantSocket = false;
+
+function setWsState(on, text) {
+  $("#wsDot").className = "dot " + (on ? "on" : "off");
+  $("#wsText").textContent = text;
+}
+
+function openSocket() {
+  wantSocket = true;
+  clearTimeout(retryTimer);
+  const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws?token=" + encodeURIComponent(token);
+  ws = new WebSocket(url);
+  ws.onopen = () => { retry = 0; setWsState(true, "connected"); };
+  ws.onmessage = (m) => { try { addLine(JSON.parse(m.data)); } catch (e) {} };
+  ws.onclose = async () => {
+    if (!wantSocket) return;
+    setWsState(false, "disconnected");
+    try { await api("/api/auth"); } catch (e) { if (e === "auth") return; }
+    retry = Math.min(retry + 1, 6);
+    retryTimer = setTimeout(openSocket, 500 * retry);
+  };
+}
+
+function closeSocket() {
+  wantSocket = false;
+  clearTimeout(retryTimer);
+  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+}
+
+function addLine(ev) {
+  if (ev.id <= lastEventId) return;
+  lastEventId = ev.id;
+  const box = $("#termBody");
+  const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  const d = new Date(ev.t);
+  const ts = d.toLocaleTimeString("en-GB", { hour12: false });
+  const div = document.createElement("div");
+  div.className = "line " + ev.level;
+  div.innerHTML = '<span class="ts">' + ts + '</span><span class="msg">' + esc(ev.msg) + "</span>" + (ev.detail ? '<span class="detail">' + esc(ev.detail) + "</span>" : "");
+  if (ev.level === "sql") {
+    div.querySelector(".msg").title = "Click to load into the editor";
+    div.querySelector(".msg").addEventListener("click", () => { ta.value = ev.msg; ta.dispatchEvent(new Event("input")); if (isMobile()) setPane("editor"); ta.focus(); });
+  }
+  box.appendChild(div);
+  while (box.childElementCount > 500) box.firstElementChild.remove();
+  if (atEnd) box.scrollTop = box.scrollHeight;
+}
+$("#clearBtn").addEventListener("click", () => ($("#termBody").innerHTML = ""));
+
+/* ---------- boot ---------- */
+(async function boot() {
+  const fromUrl = new URLSearchParams(location.search).get("token");
+  if (fromUrl) { token = fromUrl.trim().toUpperCase(); history.replaceState(null, "", location.pathname); }
+  if (!token) { showLogin(""); return; }
+  try {
+    await api("/api/auth");
+    store.set("sqlrt.token", token);
+    enter();
+  } catch (e) {
+    if (e !== "auth") showLogin(e.message);
+  }
+})();
+</script>
+</body>
+</html>

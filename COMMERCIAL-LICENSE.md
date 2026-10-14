@@ -1,37 +1,36 @@
-# Licenciamento Comercial
+# Commercial Licensing
 
-O SQLiteRealtime (Android) — módulo cliente Android do
-[DBBrowser](https://github.com/RogerPhilippe/DBBrowser) — é distribuído sob
-**dupla licença**:
+SQLiteRealtime (Android), a library that serves a web console from inside an
+Android app to query its SQLite database, is distributed under a
+**dual license**:
 
-1. **GNU Affero General Public License v3.0 (AGPLv3)** — gratuita, para
-   qualquer pessoa ou empresa que use, modifique e redistribua o projeto (ou
-   o ofereça como serviço em rede) **desde que cumpra os termos da AGPLv3**,
-   o que inclui disponibilizar o código-fonte completo de qualquer versão
-   modificada, sob a mesma licença, a quem receber o software ou usar o
-   serviço.
+1. **GNU Affero General Public License v3.0 (AGPLv3)** — free for any person
+   or company that uses, modifies and redistributes the project (or offers it
+   as a network service) **provided that they comply with the terms of the
+   AGPLv3**, which includes making the complete source code of any modified
+   version available, under the same license, to anyone who receives the
+   software or uses the service.
 
-2. **Licença comercial**, disponível mediante contrato/pagamento, para quem
-   não deseja ou não pode cumprir as obrigações da AGPLv3. Ela permite, por
-   exemplo:
-   - Incorporar este código (ou partes dele) em um aplicativo ou SDK de
-     código fechado;
-   - Distribuir versões modificadas sem a obrigação de compartilhá-las
-     publicamente.
+2. **Commercial license**, available through a contract/payment, for those who
+   do not wish to or cannot comply with the obligations of the AGPLv3. It
+   allows, for example:
+   - Embedding this code (or parts of it) in a closed-source application or SDK;
+   - Distributing modified versions without the obligation to share them
+     publicly.
 
-## Quando você precisa da licença comercial
+## When you need the commercial license
 
-Se a sua organização quer usar este projeto de uma forma que a AGPLv3 **não
-permite sem abrir o código correspondente**, entre em contato para negociar
-uma licença comercial.
+If your organization wants to use this project in a way that the AGPLv3 **does
+not allow without releasing the corresponding source code**, get in touch to
+negotiate a commercial license.
 
-## Contato
+## Contact
 
 Roger Philippe Pereira — rogerphilippepereira@gmail.com
 
-## Sobre contribuições
+## About contributions
 
-Ao contribuir com código para este projeto, você concorda com os termos
-descritos em [CONTRIBUTING.md](CONTRIBUTING.md), que incluem a concessão ao
-mantenedor do direito de relicenciar sua contribuição comercialmente — isso é
-o que torna esse modelo de dupla licença possível.
+By contributing code to this project, you agree to the terms described in
+[CONTRIBUTING.md](CONTRIBUTING.md), which include granting the maintainer the
+right to relicense your contribution commercially — this is what makes this
+dual-license model possible.
